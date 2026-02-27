@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 可交互3D模型</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.6);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-family: Arial, Helvetica, sans-serif;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">✨ 鼠标拖拽旋转 | 滚轮缩放</div>
+
+    <!-- 1. 使用 Import Map 统一管理 Three.js 和其扩展库的引入 -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        // 2. 导入所需模块
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        // --- 初始化场景、相机、渲染器 (这是Three.js应用的基础) ---
+        const scene = new THREE.Scene();
+        // 设置背景色为深灰色，让白色或亮色模型更突出
+        scene.background = new THREE.Color(0xcccccc);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(8, 4, 12); // 将相机放在一个合适的初始位置
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; // 开启阴影，让效果更真实（如果模型支持）
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // --- 添加基础光照，否则模型看起来是黑的 ---
+        // 环境光提供基础照明
+        const ambientLight = new THREE.AmbientLight(0x404060, 1.5);
+        scene.add(ambientLight);
+
+        // 主光源 - 产生阴影和立体感的平行光
+        const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+        dirLight.position.set(2, 5, 3);
+        dirLight.castShadow = true;
+        dirLight.receiveShadow = true;
+        scene.add(dirLight);
+
+        // 添加一个辅助背景光，照亮模型的背面
+        const backLight = new THREE.PointLight(0x446688, 1);
+        backLight.position.set(-3, 1, -4);
+        scene.add(backLight);
+
+        // 可选：添加一个辅助地面网格，帮助感受空间和比例
+        const gridHelper = new THREE.GridHelper(20, 20, 0xaaaaaa, 0x444444);
+        scene.add(gridHelper);
+        
+        // 可选：添加坐标轴辅助 (红X, 绿Y, 蓝Z)
+        // const axesHelper = new THREE.AxesHelper(5);
+        // scene.add(axesHelper);
+
+        // --- 初始化轨道控制器 (这是实现自由拖动旋转的关键) ---
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; // 启用惯性效果，让拖动更平滑
+        controls.dampingFactor = 0.05;
+        controls.screenSpacePanning = true; // 允许平移
+        controls.maxPolarAngle = Math.PI / 2; // 限制不能转到地下
+        controls.target.set(0, 2, 0); // 设置控制器的焦点，让模型居中
+
+        // --- 加载你的3D模型 ---
+        const loader = new GLTFLoader();
+        const modelUrl = './古建筑.glb'; // 请替换为你的模型路径 (支持 .glb, .gltf, .obj 等)
+
+        loader.load(
+            modelUrl,
+            (gltf) => {
+    const model = gltf.scene;
+    
+    // 可选：调整模型的缩放、位置以适应场景
+    model.scale.set(1.5, 1.5, 1.5);
+    model.position.set(0, 1.5, 0);
+    
+    // 让模型能够投射和接收阴影...
+    model.traverse((node) => {
+        if (node.isMesh) {
+            node.castShadow = true;
+            node.receiveShadow = true;
+        }
+    });
+
+    scene.add(model);
+    console.log('✅ 模型加载成功');
+},
+            (xhr) => {
+                // 加载进度
+                const percent = Math.floor((xhr.loaded / xhr.total) * 100);
+                console.log(`📦 加载进度: ${percent}%`);
+                // 你可以在这里更新一个进度条UI
+            },
+            (error) => {
+                console.error('❌ 模型加载失败:', error);
+            }
+        );
+
+        // --- 动画循环 (使场景持续渲染，并更新控制器) ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 更新控制器（如果启用了 damping，这一步必须要有）
+            controls.update();
+
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- 处理窗口大小变化，自适应画布 ---
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>
